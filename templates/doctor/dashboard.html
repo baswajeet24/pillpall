@@ -1,0 +1,356 @@
+{% extends 'base.html' %}
+
+{% block title %}Doctor Dashboard - PillPal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-person-badge me-2"></i>Doctor Profile
+            </div>
+            <div class="card-body">
+                <h5>Dr. {{ current_user.name }}</h5>
+                <p class="text-muted mb-1">{{ current_user.specialization or 'General Physician' }}</p>
+                <p class="mb-1"><strong>ID:</strong> {{ current_user.unique_id }}</p>
+                <p class="mb-1"><strong>License:</strong> {{ current_user.medical_license_id or 'N/A' }}</p>
+                <hr>
+                <p class="small mb-0"><i class="bi bi-hospital me-1"></i>{{ current_user.hospital_name or 'N/A' }}</p>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header bg-warning">
+                <i class="bi bi-people me-2"></i>Waiting Queue
+                <span class="badge bg-dark float-end" id="waitingCount">0</span>
+            </div>
+            <div class="list-group list-group-flush" id="waitingList">
+                <div class="list-group-item text-center text-muted">
+                    <small>Loading...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-clipboard2-pulse me-2"></i>Current Patient
+            </div>
+            <div class="card-body" id="currentPatientArea">
+                <div class="text-center py-4" id="noPatient">
+                    <i class="bi bi-person-x text-muted" style="font-size: 64px;"></i>
+                    <h4 class="text-muted mt-3">No Patient in Consultation</h4>
+                    <p class="text-muted">Click on a waiting patient to start consultation.</p>
+                </div>
+                
+                <div id="patientDetails" style="display: none;">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h4><i class="bi bi-person-fill me-2"></i><span id="patientName"></span></h4>
+                            <p class="mb-1"><strong>ID:</strong> <span id="patientId"></span></p>
+                            <p class="mb-1"><strong>Age/Gender:</strong> <span id="patientAgeGender"></span></p>
+                            <p class="mb-1"><strong>Phone:</strong> <span id="patientPhone"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info" id="aiSummaryCard">
+                                <h6><i class="bi bi-robot me-2"></i>AI Medical Summary</h6>
+                                <div id="aiSummary">No history shared</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <ul class="nav nav-tabs" id="consultationTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#prescriptionTab">
+                                <i class="bi bi-file-earmark-medical me-1"></i>Prescription
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#labTab">
+                                <i class="bi bi-clipboard2-pulse me-1"></i>Lab Request
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content p-3 border border-top-0">
+                        <div class="tab-pane fade show active" id="prescriptionTab">
+                            <form id="prescriptionForm">
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Height</label>
+                                        <input type="text" class="form-control" name="height" placeholder="e.g., 182 cm">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Vitals</label>
+                                        <input type="text" class="form-control" name="vitals" placeholder="BP, Temp, etc.">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Diagnosis</label>
+                                    <textarea class="form-control" name="diagnosis" rows="2" placeholder="Enter diagnosis"></textarea>
+                                </div>
+                                
+                                <h5 class="mt-4"><i class="bi bi-capsule me-2"></i>Medicines</h5>
+                                <div id="medicineList">
+                                    <!-- Medicine rows added here -->
+                                </div>
+                                <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addMedicineRow()">
+                                    <i class="bi bi-plus-circle me-1"></i>Add Medicine
+                                </button>
+                                
+                                <hr>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-success" onclick="submitPrescription()">
+                                        <i class="bi bi-check-circle me-2"></i>Generate Prescription & Complete
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="completeWithoutPrescription()">
+                                        Complete Without Prescription
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="labTab">
+                            <form id="labForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Test Name</label>
+                                    <input type="text" class="form-control" name="test_name" placeholder="e.g., Complete Blood Count">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Notes/Instructions</label>
+                                    <textarea class="form-control" name="notes" rows="2" placeholder="Additional instructions"></textarea>
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="submitLabRequest()">
+                                    <i class="bi bi-send me-2"></i>Send Lab Request
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentAppointmentId = null;
+let availableMedicines = [];
+
+function loadQueue() {
+    fetch('/doctor/queue')
+    .then(response => response.json())
+    .then(data => {
+        const waitingList = document.getElementById('waitingList');
+        document.getElementById('waitingCount').textContent = data.queue.length;
+        
+        if (data.queue.length === 0) {
+            waitingList.innerHTML = '<div class="list-group-item text-center text-muted"><small>No patients waiting</small></div>';
+        } else {
+            waitingList.innerHTML = data.queue.map(patient => `
+                <button class="list-group-item list-group-item-action" onclick="startConsultation(${patient.id})">
+                    <div class="d-flex justify-content-between">
+                        <span><strong>${patient.patient_name}</strong></span>
+                        <span class="badge bg-warning">Waiting</span>
+                    </div>
+                    <small class="text-muted">ID: ${patient.patient_id}</small>
+                </button>
+            `).join('');
+        }
+        
+        if (data.current_patient) {
+            showPatientDetails(data.current_patient);
+        }
+    });
+}
+
+function showPatientDetails(patient) {
+    currentAppointmentId = patient.id;
+    document.getElementById('noPatient').style.display = 'none';
+    document.getElementById('patientDetails').style.display = 'block';
+    
+    document.getElementById('patientName').textContent = patient.patient_name;
+    document.getElementById('patientId').textContent = patient.patient_id;
+    document.getElementById('patientAgeGender').textContent = `${patient.age || 'N/A'} / ${patient.gender || 'N/A'}`;
+    document.getElementById('patientPhone').textContent = patient.phone || 'N/A';
+    
+    if (patient.share_history && patient.ai_summary) {
+        document.getElementById('aiSummary').innerHTML = patient.ai_summary.replace(/\n/g, '<br>');
+    } else {
+        document.getElementById('aiSummary').textContent = 'Patient did not share medical history';
+    }
+    
+    loadMedicines();
+}
+
+function startConsultation(appointmentId) {
+    fetch(`/doctor/start-consultation/${appointmentId}`, {method: 'POST'})
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadQueue();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+function loadMedicines() {
+    fetch('/doctor/available-medicines')
+    .then(response => response.json())
+    .then(data => {
+        availableMedicines = data;
+        addMedicineRow();
+    });
+}
+
+function addMedicineRow() {
+    const container = document.getElementById('medicineList');
+    const rowId = Date.now();
+    
+    const medicineOptions = availableMedicines.map(m => 
+        `<option value="${m.id}" data-name="${m.name}">${m.name} (Stock: ${m.stock})</option>`
+    ).join('');
+    
+    const row = document.createElement('div');
+    row.className = 'row mb-2 medicine-row';
+    row.id = `med-${rowId}`;
+    row.innerHTML = `
+        <div class="col-md-4">
+            <select class="form-select form-select-sm" name="medicine_id">
+                <option value="">Select Medicine</option>
+                ${medicineOptions}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="text" class="form-control form-control-sm" name="dosage" placeholder="1-0-1">
+        </div>
+        <div class="col-md-2">
+            <select class="form-select form-select-sm" name="timing">
+                <option value="After Food">After Food</option>
+                <option value="Before Food">Before Food</option>
+                <option value="With Food">With Food</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <input type="text" class="form-control form-control-sm" name="duration" placeholder="1 Week">
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeMedicineRow('med-${rowId}')">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(row);
+}
+
+function removeMedicineRow(rowId) {
+    document.getElementById(rowId).remove();
+}
+
+function submitPrescription() {
+    const form = document.getElementById('prescriptionForm');
+    const formData = new FormData(form);
+    
+    const medicines = [];
+    document.querySelectorAll('.medicine-row').forEach(row => {
+        const medicineSelect = row.querySelector('[name="medicine_id"]');
+        const medicineId = medicineSelect.value;
+        if (medicineId) {
+            const selectedOption = medicineSelect.options[medicineSelect.selectedIndex];
+            medicines.push({
+                medicine_id: parseInt(medicineId),
+                name: selectedOption.dataset.name,
+                dosage: row.querySelector('[name="dosage"]').value || '1-0-1',
+                timing: row.querySelector('[name="timing"]').value,
+                duration: row.querySelector('[name="duration"]').value || '1 Week'
+            });
+        }
+    });
+    
+    if (medicines.length === 0) {
+        alert('Please add at least one medicine');
+        return;
+    }
+    
+    const data = {
+        diagnosis: formData.get('diagnosis'),
+        height: formData.get('height'),
+        vitals: formData.get('vitals'),
+        medicines: medicines
+    };
+    
+    fetch(`/doctor/create-prescription/${currentAppointmentId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Prescription created successfully!');
+            resetConsultation();
+            loadQueue();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+function submitLabRequest() {
+    const form = document.getElementById('labForm');
+    const testName = form.querySelector('[name="test_name"]').value;
+    const notes = form.querySelector('[name="notes"]').value;
+    
+    if (!testName) {
+        alert('Please enter test name');
+        return;
+    }
+    
+    fetch(`/doctor/create-lab-request/${currentAppointmentId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({test_name: testName, notes: notes})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Lab request created successfully!');
+            form.reset();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+function completeWithoutPrescription() {
+    if (!confirm('Complete consultation without generating a prescription?')) return;
+    
+    fetch(`/doctor/complete-consultation/${currentAppointmentId}`, {method: 'POST'})
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resetConsultation();
+            loadQueue();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+function resetConsultation() {
+    currentAppointmentId = null;
+    document.getElementById('noPatient').style.display = 'block';
+    document.getElementById('patientDetails').style.display = 'none';
+    document.getElementById('prescriptionForm').reset();
+    document.getElementById('labForm').reset();
+    document.getElementById('medicineList').innerHTML = '';
+}
+
+loadQueue();
+setInterval(loadQueue, 5000);
+</script>
+{% endblock %}

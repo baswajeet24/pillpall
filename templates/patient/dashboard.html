@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+
+{% block title %}Patient Dashboard - PillPal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-person-circle me-2"></i>My Profile
+            </div>
+            <div class="card-body">
+                <p><strong>Name:</strong> {{ current_user.name }}</p>
+                <p><strong>ID:</strong> {{ current_user.unique_id }}</p>
+                <p><strong>Age:</strong> {{ current_user.age or 'N/A' }}</p>
+                <p><strong>Gender:</strong> {{ current_user.gender or 'N/A' }}</p>
+                <p><strong>Phone:</strong> {{ current_user.phone }}</p>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-qr-code-scan me-2"></i>Check-in
+            </div>
+            <div class="card-body">
+                <p class="small">Enter Doctor's ID to check-in for appointment</p>
+                <button class="btn btn-info w-100" data-bs-toggle="modal" data-bs-target="#scanQRModal">
+                    <i class="bi bi-qr-code me-2"></i>Scan QR / Enter ID
+                </button>
+            </div>
+        </div>
+        
+        <div class="list-group mt-3">
+            <a href="{{ url_for('patient.prescriptions') }}" class="list-group-item list-group-item-action">
+                <i class="bi bi-file-earmark-medical me-2"></i>My Prescriptions
+            </a>
+            <a href="{{ url_for('patient.tests') }}" class="list-group-item list-group-item-action">
+                <i class="bi bi-clipboard2-pulse me-2"></i>My Lab Tests
+            </a>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-calendar-check me-2"></i>Current Appointments
+            </div>
+            <div class="card-body">
+                {% if appointments %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Doctor</th>
+                                <th>Hospital</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for apt in appointments %}
+                            <tr>
+                                <td>Dr. {{ apt.doctor.name }}</td>
+                                <td>{{ apt.doctor.hospital_name or 'N/A' }}</td>
+                                <td>
+                                    {% if apt.status == 'Waiting' %}
+                                    <span class="badge bg-warning">Waiting</span>
+                                    {% elif apt.status == 'In-Consultation' %}
+                                    <span class="badge bg-info">In Consultation</span>
+                                    {% else %}
+                                    <span class="badge bg-success">Completed</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ apt.created_at.strftime('%d-%b-%Y %H:%M') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No appointments yet. Scan a doctor's QR code to check-in.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-file-earmark-medical me-2"></i>Recent Prescriptions
+                    </div>
+                    <div class="card-body">
+                        {% if prescriptions %}
+                        <ul class="list-group list-group-flush">
+                            {% for rx in prescriptions[:5] %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>Dr. {{ rx.doctor.name }}</strong><br>
+                                    <small class="text-muted">{{ rx.created_at.strftime('%d-%b-%Y') }}</small>
+                                </div>
+                                {% if rx.pdf_path %}
+                                <a href="{{ url_for('patient.download_prescription', prescription_id=rx.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted mb-0">No prescriptions yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-clipboard2-pulse me-2"></i>Recent Lab Tests
+                    </div>
+                    <div class="card-body">
+                        {% if lab_requests %}
+                        <ul class="list-group list-group-flush">
+                            {% for test in lab_requests[:5] %}
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong>{{ test.test_name }}</strong>
+                                    {% if test.status == 'Pending' %}
+                                    <span class="badge bg-warning">Pending</span>
+                                    {% else %}
+                                    <span class="badge bg-success">Done</span>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">{{ test.created_at.strftime('%d-%b-%Y') }}</small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted mb-0">No lab tests yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="scanQRModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-qr-code me-2"></i>Check-in with Doctor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="scanStep1">
+                    <p>Enter the Doctor's ID to check-in for your appointment:</p>
+                    <div class="mb-3">
+                        <input type="text" class="form-control form-control-lg" id="doctorIdInput" placeholder="e.g., DR3210">
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="findDoctor()">
+                        <i class="bi bi-search me-2"></i>Find Doctor
+                    </button>
+                </div>
+                
+                <div id="scanStep2" style="display: none;">
+                    <div class="text-center mb-3">
+                        <i class="bi bi-person-check-fill text-success" style="font-size: 48px;"></i>
+                    </div>
+                    <h5 class="text-center" id="doctorFoundName"></h5>
+                    <p class="text-center text-muted" id="doctorFoundDetails"></p>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-shield-check me-2"></i>
+                        <strong>Permission Request:</strong> Share your medical history summary with this doctor?
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" onclick="confirmAppointment(true)">
+                            <i class="bi bi-check-circle me-2"></i>Yes, Share History & Check-in
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="confirmAppointment(false)">
+                            <i class="bi bi-x-circle me-2"></i>Check-in Without Sharing
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="scanResult" style="display: none;" class="text-center">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 64px;"></i>
+                    <h4 class="mt-3">Appointment Created!</h4>
+                    <p id="resultMessage"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedDoctorId = null;
+
+function findDoctor() {
+    const doctorId = document.getElementById('doctorIdInput').value.trim();
+    if (!doctorId) {
+        alert('Please enter a Doctor ID');
+        return;
+    }
+    
+    fetch('/patient/scan-qr', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `doctor_id=${encodeURIComponent(doctorId)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            selectedDoctorId = data.doctor_id;
+            document.getElementById('doctorFoundName').textContent = `Dr. ${data.doctor_name}`;
+            document.getElementById('doctorFoundDetails').textContent = 
+                `${data.specialization || 'General Physician'} | ${data.hospital || 'N/A'}`;
+            document.getElementById('scanStep1').style.display = 'none';
+            document.getElementById('scanStep2').style.display = 'block';
+        } else {
+            alert(data.message || 'Doctor not found');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred');
+    });
+}
+
+function confirmAppointment(shareHistory) {
+    fetch('/patient/confirm-appointment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `doctor_id=${selectedDoctorId}&share_history=${shareHistory}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('scanStep2').style.display = 'none';
+        document.getElementById('scanResult').style.display = 'block';
+        document.getElementById('resultMessage').textContent = data.message;
+        
+        if (data.success) {
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred');
+    });
+}
+
+document.getElementById('scanQRModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('scanStep1').style.display = 'block';
+    document.getElementById('scanStep2').style.display = 'none';
+    document.getElementById('scanResult').style.display = 'none';
+    document.getElementById('doctorIdInput').value = '';
+    selectedDoctorId = null;
+});
+</script>
+{% endblock %}

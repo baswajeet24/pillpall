@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}Lab Dashboard - PillPal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h3><i class="bi bi-clipboard2-pulse me-2"></i>Lab Dashboard</h3>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-warning">
+                <i class="bi bi-hourglass-split me-2"></i>Pending Requests
+                <span class="badge bg-dark float-end" id="pendingCount">{{ pending_requests | length }}</span>
+            </div>
+            <div class="list-group list-group-flush" id="pendingList">
+                {% if pending_requests %}
+                {% for req in pending_requests %}
+                <div class="list-group-item" id="request-{{ req.id }}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="mb-1">{{ req.test_name }}</h6>
+                            <p class="mb-1"><strong>Patient:</strong> {{ req.patient.name }} ({{ req.patient.unique_id }})</p>
+                            <p class="mb-1"><strong>Doctor:</strong> Dr. {{ req.doctor.name }}</p>
+                            {% if req.notes %}
+                            <p class="mb-1 text-muted"><small>Notes: {{ req.notes }}</small></p>
+                            {% endif %}
+                            <small class="text-muted">{{ req.created_at.strftime('%d-%b-%Y %H:%M') }}</small>
+                        </div>
+                        <button class="btn btn-success btn-sm" onclick="showCompleteModal({{ req.id }}, '{{ req.test_name }}', '{{ req.patient.name }}')">
+                            <i class="bi bi-check-circle me-1"></i>Mark Done
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="list-group-item text-center text-muted">
+                    No pending requests
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-check-circle me-2"></i>Recently Completed
+            </div>
+            <div class="list-group list-group-flush">
+                {% if completed_requests %}
+                {% for req in completed_requests %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="mb-1">{{ req.test_name }}</h6>
+                            <p class="mb-1">{{ req.patient.name }}</p>
+                            {% if req.result %}
+                            <p class="mb-0 text-success"><small>Result: {{ req.result }}</small></p>
+                            {% endif %}
+                        </div>
+                        <span class="badge bg-success">Done</span>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="list-group-item text-center text-muted">
+                    No completed requests yet
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="completeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Complete Lab Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="completeRequestId">
+                <p><strong>Test:</strong> <span id="completeTestName"></span></p>
+                <p><strong>Patient:</strong> <span id="completePatientName"></span></p>
+                <div class="mb-3">
+                    <label class="form-label">Result/Notes</label>
+                    <textarea class="form-control" id="resultText" rows="3" placeholder="Enter test results"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="completeRequest()">
+                    <i class="bi bi-check-circle me-1"></i>Mark as Done
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showCompleteModal(id, testName, patientName) {
+    document.getElementById('completeRequestId').value = id;
+    document.getElementById('completeTestName').textContent = testName;
+    document.getElementById('completePatientName').textContent = patientName;
+    document.getElementById('resultText').value = '';
+    new bootstrap.Modal(document.getElementById('completeModal')).show();
+}
+
+function completeRequest() {
+    const id = document.getElementById('completeRequestId').value;
+    const result = document.getElementById('resultText').value;
+    
+    fetch(`/staff/lab/complete/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({result: result})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    });
+}
+
+function refreshPending() {
+    fetch('/staff/lab/pending')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('pendingCount').textContent = data.length;
+    });
+}
+
+setInterval(refreshPending, 5000);
+</script>
+{% endblock %}

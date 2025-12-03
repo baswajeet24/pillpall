@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}Receptionist Dashboard - PillPal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h3><i class="bi bi-reception-4 me-2"></i>Receptionist Dashboard</h3>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-people me-2"></i>Select Doctor
+            </div>
+            <div class="list-group list-group-flush">
+                {% for doctor in doctors %}
+                <button class="list-group-item list-group-item-action doctor-btn" 
+                        onclick="selectDoctor({{ doctor.id }}, '{{ doctor.name }}')">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Dr. {{ doctor.name }}</strong><br>
+                            <small class="text-muted">{{ doctor.specialization or 'General Physician' }}</small>
+                        </div>
+                        <span class="badge bg-secondary doctor-count" id="count-{{ doctor.id }}">0</span>
+                    </div>
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-list-check me-2"></i>
+                <span id="queueTitle">Select a Doctor to View Queue</span>
+                <span class="float-end">
+                    <span class="badge bg-light text-dark" id="refreshIndicator">
+                        <i class="bi bi-arrow-repeat"></i> Auto-refresh: 3s
+                    </span>
+                </span>
+            </div>
+            <div class="card-body" id="queueArea">
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-arrow-left-circle" style="font-size: 48px;"></i>
+                    <p class="mt-3">Select a doctor from the list to view their patient queue</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedDoctorId = null;
+let refreshInterval = null;
+
+function selectDoctor(doctorId, doctorName) {
+    selectedDoctorId = doctorId;
+    document.getElementById('queueTitle').textContent = `Dr. ${doctorName}'s Queue`;
+    
+    document.querySelectorAll('.doctor-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.closest('.doctor-btn').classList.add('active');
+    
+    loadQueue();
+    
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(loadQueue, 3000);
+}
+
+function loadQueue() {
+    if (!selectedDoctorId) return;
+    
+    fetch(`/staff/receptionist/queue/${selectedDoctorId}`)
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById(`count-${selectedDoctorId}`).textContent = data.waiting_count;
+        
+        let html = '';
+        
+        if (data.current_patient) {
+            html += `
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-person-check me-2"></i>Currently in Consultation</h5>
+                    <p class="mb-0">
+                        <strong>${data.current_patient.patient_name}</strong> 
+                        (ID: ${data.current_patient.patient_id})
+                    </p>
+                </div>
+            `;
+        }
+        
+        if (data.queue.length > 0) {
+            html += `
+                <h5><i class="bi bi-hourglass-split me-2"></i>Waiting Patients (${data.queue.length})</h5>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Patient Name</th>
+                                <th>Patient ID</th>
+                                <th>Check-in Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.queue.forEach((patient, idx) => {
+                html += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><strong>${patient.patient_name}</strong></td>
+                        <td>${patient.patient_id}</td>
+                        <td>${patient.time}</td>
+                        <td><span class="badge bg-warning text-dark">Waiting</span></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+        } else if (!data.current_patient) {
+            html = `
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                    <p class="mt-3">No patients in queue</p>
+                </div>
+            `;
+        }
+        
+        document.getElementById('queueArea').innerHTML = html;
+    });
+}
+
+{% for doctor in doctors %}
+fetch(`/staff/receptionist/queue/{{ doctor.id }}`)
+.then(response => response.json())
+.then(data => {
+    document.getElementById(`count-{{ doctor.id }}`).textContent = data.waiting_count;
+});
+{% endfor %}
+</script>
+{% endblock %}
