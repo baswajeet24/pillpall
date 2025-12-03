@@ -1,0 +1,79 @@
+Act as a Senior Full Stack Developer. Build a web application named "PillPall".
+Stack: Python (Flask), SQLAlchemy (SQLite), HTML/CSS/JS (Bootstrap 5).
+CRITICAL: Use a local instance/pillpal.db SQLite file. Do NOT use Replit DB or Replit Auth. I must be able to download this and run it locally.
+
+### 1. Dependencies & Configuration
+- Use flask-login for authentication.
+- Use google-generativeai for summarizing medical history.
+- Use fpdf for generating custom PDF prescriptions.
+- Use werkzeug.security for password hashing.
+- Load GEMINI_API_KEY from environment variables.
+
+### 2. Database Models (Relational)
+Create these models with appropriate relationships:
+1. *User:* id (PK), unique_id (Custom), role (Patient, Doctor, Pharmacist, Lab, Receptionist), name, phone, age, gender, password_hash.
+   - Doctor Specifics: specialization, hospital_name, medical_license_id, address, website, email.
+   - Patient Specifics: raw_medical_history (text), ai_summary_history (text).
+2. *MedicineInventory:* id, name, stock_quantity (Managed by Pharmacist).
+3. *Appointment:* link Patient & Doctor. status (Waiting, In-Consultation, Completed).
+4. *Prescription:* link Patient & Doctor. content (JSON: meds, dosage), diagnosis, height, vitals, pdf_path.
+5. *LabRequest:* link Patient, Doctor, & LabUser. status (Pending, Done).
+
+### 3. Logic & ID Generation
+- *Patient ID Gen:* On registration, auto-generate unique_id = Last 4 digits of Phone + First 3 chars of Name.
+- *Gemini AI Integration:* During Patient Registration, take the raw_medical_history input, send it to Gemini API with the prompt "Summarize this medical history into 3 bullet points", and save the result to ai_summary_history.
+
+### 4. Workflows & Portals
+
+*A. Landing Page:*
+- Show logo.png and a "Enter Pill Pal" button leading to Login/Register.
+
+*B. Patient Portal:*
+- *Register:* Inputs for Name, Phone, Age, Gender, Password, "Previous Medical History" (Textarea). Trigger ID gen and Gemini Summary here.
+- *Dashboard:*
+  - Sidebar: "My Prescriptions" (View & Download PDF), "My Tests".
+  - *QR/Check-in Logic:* A button "Scan QR" (Simulate with input: Enter Doctor ID).
+  - *Permission Modal:* On scan, ask "Share History with Dr. [Name]?". If Yes -> Create Appointment (Status: "Waiting").
+
+*C. Receptionist Portal:*
+- *View:* Read-only access to Doctor's Queue.
+- *Real-Time Update:* Use JS Polling (setInterval 3s) to check for new "Waiting" patients.
+
+*D. Doctor Portal:*
+- *Register:* Extra fields for Specialization, Hospital Name, License, Address.
+- *Consultation:*
+  - Sidebar: Patient List.
+  - Main View: Current "Waiting" patient. Show Patient's ai_summary_history.
+- *Prescription Form:*
+  - *Inventory Filter:* The "Medicine Name" dropdown MUST ONLY populate with items from MedicineInventory where stock_quantity > 0.
+  - *Submit:* Generates a PDF (Custom Layout), saves to DB, decreases stock in Inventory.
+
+*E. Pharmacist Portal:*
+- *Search:* Input Patient Unique ID -> View latest prescription.
+- *Inventory:* Add/Edit medicines and stock levels.
+
+*F. Lab Portal:*
+- View LabRequest entries created by Doctors. Mark as "Done".
+
+### 5. PDF Generation (Visual Requirement)
+The PDF must match the "Best Health" reference style strictly using fpdf:
+- *Header:*
+  - Left: Hospital Name (Blue, Large), Slogan (Gray, Small).
+  - Right: Dr. Name (Bold), Degrees, Address, Contact Info.
+- *Patient Info Strip:* A light gray background bar spanning the width. Contains: Name, Age/Sex, Phone, Date (Right aligned).
+- *Body:*
+  - Lines for "Height:" and "Diagnosis:".
+  - Large "Rx" symbol.
+- *Table:*
+  - Columns: #, Medicine (Name bold, instruction small below), Dosage (e.g., 1-0-1), Timing-Freq (e.g., After Food - Daily), Duration.
+  - Add grid lines for rows.
+- *Footer:* "Download our app" (Center), Doctor Signature (Right), Disclaimer at bottom.
+
+### 6. Implementation Steps
+1. Setup app.py with create_app factory and DB models.
+2. Create a seed_database command to add 5 sample medicines to Inventory.
+3. Build the Routes (auth.py, patient.py, doctor.py, staff.py).
+4. Build HTML Templates using Bootstrap 5.
+5. Implement the PDF Generator class.
+
+Start by coding the Database Models and the Auth logic.
