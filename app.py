@@ -41,6 +41,13 @@ def create_app():
     app.register_blueprint(doctor_bp, url_prefix='/doctor')
     app.register_blueprint(staff_bp, url_prefix='/staff')
     
+    @app.template_filter('from_json')
+    def from_json_filter(value):
+        try:
+            return json.loads(value) if value else []
+        except:
+            return []
+    
     with app.app_context():
         db.create_all()
     
